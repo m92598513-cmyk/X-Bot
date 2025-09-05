@@ -16,7 +16,24 @@ auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET
 api = tweepy.API(auth)
 
 # ===============================
-# 2. Auto-Post from Multiple Sports RSS Feeds
+# 2. Track Posted Headlines in File
+# ===============================
+POSTED_FILE = "posted.txt"
+
+def load_posted_titles():
+    if not os.path.exists(POSTED_FILE):
+        return set()
+    with open(POSTED_FILE, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f.readlines())
+
+def save_posted_title(title):
+    with open(POSTED_FILE, "a", encoding="utf-8") as f:
+        f.write(title + "\n")
+
+posted_titles = load_posted_titles()
+
+# ===============================
+# 3. Auto-Post from Multiple Sports RSS Feeds
 # ===============================
 RSS_FEEDS = [
     "https://www.espn.com/espn/rss/news",
@@ -24,9 +41,6 @@ RSS_FEEDS = [
     "https://www.espn.com/espn/rss/mlb/news",
     "https://www.espn.com/espn/rss/nba/news"
 ]
-
-# keep track of already-posted headlines
-posted_titles = set()
 
 def post_from_rss():
     global posted_titles
@@ -44,6 +58,7 @@ def post_from_rss():
             try:
                 api.update_status(tweet)
                 posted_titles.add(title)
+                save_posted_title(title)
                 print("Tweeted:", tweet)
                 return  # only post 1 item per cycle
             except Exception as e:
@@ -51,7 +66,7 @@ def post_from_rss():
     print("No new items to post.")
 
 # ===============================
-# 3. Auto-Reply to Sports Tweets
+# 4. Auto-Reply to Sports Tweets
 # ===============================
 SEARCH_TERMS = ["NFL", "NBA", "Yankees", "Touchdown", "Goal"]
 REPLIES = [
@@ -65,7 +80,7 @@ REPLIES = [
 def auto_reply():
     for tweet in tweepy.Cursor(api.search_tweets, q=" OR ".join(SEARCH_TERMS), lang="en").items(3):
         try:
-            if not tweet.favorited:  # avoid repeating the same reply
+            if not tweet.favorited:  # avoid replying twice
                 message = random.choice(REPLIES)
                 api.update_status(
                     status=message,
@@ -74,14 +89,18 @@ def auto_reply():
                 )
                 api.create_favorite(tweet.id)  # mark as replied
                 print(f"Replied to @{tweet.user.screen_name}: {message}")
-                time.sleep(20)
+                time.sleep(random.randint(15, 40))  # pause between replies
         except Exception as e:
             print("Error replying:", e)
 
 # ===============================
-# 4. Main Bot Loop
+# 5. Main Bot Loop (Random Delay)
 # ===============================
 while True:
     post_from_rss()
     auto_reply()
-    time.sleep(1800)  # run every 30 minutes
+
+    # random delay between 25 and 45 minutes
+    delay = random.randint(1500, 2700)
+    print(f"Sleeping for {delay//60} minutes...")
+    time.sleep(delay)
