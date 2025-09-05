@@ -3,6 +3,21 @@ import tweepy
 import feedparser
 import random
 import time
+import logging
+
+# ===============================
+# 0. Setup Logging
+# ===============================
+logging.basicConfig(
+    filename="bot.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+console.setFormatter(formatter)
+logging.getLogger("").addHandler(console)
 
 # ===============================
 # 1. Authenticate with ENV VARS
@@ -59,14 +74,14 @@ def post_from_rss():
                 api.update_status(tweet)
                 posted_titles.add(title)
                 save_posted_title(title)
-                print("Tweeted:", tweet)
+                logging.info(f"Tweeted: {tweet}")
                 return  # only post 1 item per cycle
             except Exception as e:
-                print("Error posting:", e)
-    print("No new items to post.")
+                logging.error(f"Error posting: {e}")
+    logging.info("No new items to post.")
 
 # ===============================
-# 4. Auto-Reply to Sports Tweets
+# 4. Auto-Reply / Like / Retweet
 # ===============================
 SEARCH_TERMS = ["NFL", "NBA", "Yankees", "Touchdown", "Goal"]
 REPLIES = [
@@ -77,30 +92,42 @@ REPLIES = [
     "🏆 Championship vibes."
 ]
 
-def auto_reply():
+def engage_with_tweets():
     for tweet in tweepy.Cursor(api.search_tweets, q=" OR ".join(SEARCH_TERMS), lang="en").items(3):
         try:
-            if not tweet.favorited:  # avoid replying twice
-                message = random.choice(REPLIES)
-                api.update_status(
-                    status=message,
-                    in_reply_to_status_id=tweet.id,
-                    auto_populate_reply_metadata=True
-                )
-                api.create_favorite(tweet.id)  # mark as replied
-                print(f"Replied to @{tweet.user.screen_name}: {message}")
-                time.sleep(random.randint(15, 40))  # pause between replies
+            if not tweet.favorited:
+                # Randomly choose action
+                action = random.choice(["reply", "like", "retweet"])
+
+                if action == "reply":
+                    message = random.choice(REPLIES)
+                    api.update_status(
+                        status=message,
+                        in_reply_to_status_id=tweet.id,
+                        auto_populate_reply_metadata=True
+                    )
+                    api.create_favorite(tweet.id)
+                    logging.info(f"Replied to @{tweet.user.screen_name}: {message}")
+
+                elif action == "like":
+                    api.create_favorite(tweet.id)
+                    logging.info(f"Liked tweet from @{tweet.user.screen_name}")
+
+                elif action == "retweet":
+                    api.retweet(tweet.id)
+                    logging.info(f"Retweeted @{tweet.user.screen_name}")
+
+                time.sleep(random.randint(15, 40))  # pause between actions
         except Exception as e:
-            print("Error replying:", e)
+            logging.error(f"Error engaging: {e}")
 
 # ===============================
 # 5. Main Bot Loop (Random Delay)
 # ===============================
 while True:
     post_from_rss()
-    auto_reply()
+    engage_with_tweets()
 
-    # random delay between 25 and 45 minutes
-    delay = random.randint(1500, 2700)
-    print(f"Sleeping for {delay//60} minutes...")
+    delay = random.randint(1500, 2700)  # 25–45 minutes
+    logging.info(f"Sleeping for {delay//60} minutes...")
     time.sleep(delay)
